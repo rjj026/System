@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   ArrowRight, ArrowLeft, CheckCircle2, Settings, Sparkles, Shield, BarChart3,
-  AlertTriangle, Database, Info, Gauge, Table as TableIcon,
+  AlertTriangle, Database, Info, Gauge, Table as TableIcon, Columns2, Rows3,
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { preprocessData } from "@/lib/algorithms";
@@ -89,8 +89,9 @@ const Preprocess = () => {
     return Array.from({ length: featureCount }).map((_, j) => hs[j] || `F${j + 1}`);
   }, [datasets, featureCount]);
 
+  const [showAllRawRows, setShowAllRawRows] = useState(false);
   const [showAllRows, setShowAllRows] = useState(false);
-  const [showRaw, setShowRaw] = useState(false);
+  const [compareMode, setCompareMode] = useState<"processed" | "sideBySide" | "interleaved">("processed");
   const [timing, setTiming] = useState<{ start: Date; end: Date; ms: number } | null>(null);
 
   const handlePreprocess = async () => {
@@ -113,6 +114,7 @@ const Preprocess = () => {
     setPreprocessedData(result);
     setTiming({ start: startDate, end: endDate, ms: t1 - t0 });
     setProcessing(false);
+    setCompareMode("sideBySide");
   };
 
   const qualityLabel =
@@ -201,6 +203,64 @@ const Preprocess = () => {
               </div>
             </Card>
           </div>
+        )}
+
+        {/* ============ SECTION 1.5: ORIGINAL DATASET PREVIEW (always visible once uploaded) ============ */}
+        {datasets.length > 0 && (
+          <Card className="glass-card p-6 animate-slide-up">
+            <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <TableIcon className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-display text-lg font-semibold text-foreground">Original Dataset Preview</h3>
+              </div>
+              <Badge variant="outline">
+                {combinedRaw.length} rows × {featureCount} features (before processing)
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Raw values exactly as uploaded — before imputation, outlier correction, or normalization.
+            </p>
+            <div className="overflow-auto rounded-lg border border-border max-h-[24rem]">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-muted z-10">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                    {realHeaders.map((h, j) => (
+                      <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(showAllRawRows ? combinedRaw : combinedRaw.slice(0, 10)).map((row, i) => (
+                    <tr key={i} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                      <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                      {row.map((v, j) => (
+                        <td key={j} className="px-3 py-1.5 font-mono text-foreground">
+                          {v === undefined || v === null || isNaN(v as number) ? (
+                            <span className="text-destructive">missing</span>
+                          ) : (
+                            Number(v).toFixed(2)
+                          )}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {combinedRaw.length > 10 && (
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-xs text-muted-foreground">
+                  {showAllRawRows
+                    ? `Showing all ${combinedRaw.length} original rows`
+                    : `Showing first 10 of ${combinedRaw.length} original rows`}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => setShowAllRawRows((v) => !v)}>
+                  {showAllRawRows ? "Show first 10" : "Show all rows"}
+                </Button>
+              </div>
+            )}
+          </Card>
         )}
 
         {/* ============ SECTION 2: PIPELINE STEPS ============ */}
@@ -317,58 +377,155 @@ const Preprocess = () => {
               </div>
             </Card>
 
-            {/* ============ SECTION 4: OPTIMIZED DATA PREVIEW ============ */}
+            {/* ============ SECTION 4: ORIGINAL vs PROCESSED COMPARISON ============ */}
             <Card className="glass-card p-6 animate-scale-in">
               <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <TableIcon className="h-5 w-5 text-primary" />
-                  <h3 className="font-display text-lg font-semibold text-foreground">Optimized Data Preview (Real Values)</h3>
+                  <h3 className="font-display text-lg font-semibold text-foreground">Original vs. Processed Comparison</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="secondary">
                     {preprocessedData.normalized.length} rows × {preprocessedData.normalized[0]?.length || 0} features
                   </Badge>
-                  <Button size="sm" variant={showRaw ? "default" : "outline"} onClick={() => setShowRaw((v) => !v)}>
-                    {showRaw ? "Showing: Raw vs Optimized" : "Compare with Raw"}
-                  </Button>
+                  <div className="flex rounded-lg border border-border overflow-hidden">
+                    <Button
+                      size="sm"
+                      variant={compareMode === "processed" ? "default" : "ghost"}
+                      className="rounded-none"
+                      onClick={() => setCompareMode("processed")}
+                    >
+                      Processed Only
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={compareMode === "sideBySide" ? "default" : "ghost"}
+                      className="rounded-none"
+                      onClick={() => setCompareMode("sideBySide")}
+                    >
+                      <Columns2 className="mr-1.5 h-3.5 w-3.5" /> Side by Side
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant={compareMode === "interleaved" ? "default" : "ghost"}
+                      className="rounded-none"
+                      onClick={() => setCompareMode("interleaved")}
+                    >
+                      <Rows3 className="mr-1.5 h-3.5 w-3.5" /> Interleaved
+                    </Button>
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mb-3">
                 Real Z-score normalized values computed from your uploaded dataset (mean ≈ 0, std ≈ 1).
                 Highlighted cells (|z| &gt; 1.5) indicate strong deviations from the feature mean.
-                {showRaw && " Raw original values are shown in gray below each optimized row."}
+                {compareMode !== "processed" && " Original raw values are shown alongside the processed values below."}
               </p>
-              <div className="overflow-auto rounded-lg border border-border max-h-[32rem]">
-                <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-muted z-10">
-                    <tr>
-                      <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
-                      {showRaw && <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Type</th>}
-                      {realHeaders.map((h, j) => (
-                        <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(showAllRows ? preprocessedData.normalized : preprocessedData.normalized.slice(0, 20)).map((row, i) => (
-                      <>
-                        <tr key={`opt-${i}`} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
-                          <td className="px-3 py-1.5 text-muted-foreground" rowSpan={showRaw ? 2 : 1}>{i + 1}</td>
-                          {showRaw && (
+
+              {compareMode === "sideBySide" && (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {/* Original column */}
+                  <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <Badge variant="outline">Original</Badge>
+                      <span className="text-xs text-muted-foreground">Before processing</span>
+                    </div>
+                    <div className="overflow-auto rounded-lg border border-border max-h-[28rem]">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-muted z-10">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                            {realHeaders.map((h, j) => (
+                              <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(showAllRows ? combinedRaw : combinedRaw.slice(0, 20)).map((row, i) => (
+                            <tr key={i} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                              {row.map((v, j) => (
+                                <td key={j} className="px-3 py-1.5 font-mono text-muted-foreground">
+                                  {v === undefined || v === null || isNaN(v as number) ? (
+                                    <span className="text-destructive">missing</span>
+                                  ) : (
+                                    Number(v).toFixed(2)
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Processed column */}
+                  <div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-primary/10 text-primary border-0">Processed</Badge>
+                      <span className="text-xs text-muted-foreground">After imputation, outlier correction & scaling</span>
+                    </div>
+                    <div className="overflow-auto rounded-lg border border-border max-h-[28rem]">
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 bg-muted z-10">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                            {realHeaders.map((h, j) => (
+                              <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(showAllRows ? preprocessedData.normalized : preprocessedData.normalized.slice(0, 20)).map((row, i) => (
+                            <tr key={i} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                              <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                              {row.map((v, j) => (
+                                <td key={j} className={cn(
+                                  "px-3 py-1.5 font-mono",
+                                  Math.abs(v) > 1.5 ? "text-accent font-semibold" : "text-foreground"
+                                )}>
+                                  {Number.isFinite(v) ? v.toFixed(4) : "—"}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {compareMode === "interleaved" && (
+                <div className="overflow-auto rounded-lg border border-border max-h-[32rem]">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted z-10">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                        <th className="px-3 py-2 text-left font-semibold text-muted-foreground">Type</th>
+                        {realHeaders.map((h, j) => (
+                          <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(showAllRows ? preprocessedData.normalized : preprocessedData.normalized.slice(0, 20)).map((row, i) => (
+                        <>
+                          <tr key={`opt-${i}`} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                            <td className="px-3 py-1.5 text-muted-foreground" rowSpan={2}>{i + 1}</td>
                             <td className="px-3 py-1.5">
                               <Badge variant="secondary" className="bg-primary/10 text-primary border-0 text-[10px]">OPT</Badge>
                             </td>
-                          )}
-                          {row.map((v, j) => (
-                            <td key={j} className={cn(
-                              "px-3 py-1.5 font-mono",
-                              Math.abs(v) > 1.5 ? "text-accent font-semibold" : "text-foreground"
-                            )}>
-                              {Number.isFinite(v) ? v.toFixed(4) : "—"}
-                            </td>
-                          ))}
-                        </tr>
-                        {showRaw && (
+                            {row.map((v, j) => (
+                              <td key={j} className={cn(
+                                "px-3 py-1.5 font-mono",
+                                Math.abs(v) > 1.5 ? "text-accent font-semibold" : "text-foreground"
+                              )}>
+                                {Number.isFinite(v) ? v.toFixed(4) : "—"}
+                              </td>
+                            ))}
+                          </tr>
                           <tr key={`raw-${i}`} className="border-b border-border/50 bg-muted/20">
                             <td className="px-3 py-1.5">
                               <Badge variant="outline" className="text-[10px]">RAW</Badge>
@@ -379,18 +536,49 @@ const Preprocess = () => {
                               </td>
                             ))}
                           </tr>
-                        )}
-                      </>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {compareMode === "processed" && (
+                <div className="overflow-auto rounded-lg border border-border max-h-[32rem]">
+                  <table className="w-full text-xs">
+                    <thead className="sticky top-0 bg-muted z-10">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-muted-foreground">#</th>
+                        {realHeaders.map((h, j) => (
+                          <th key={j} className="px-3 py-2 text-left font-semibold text-muted-foreground whitespace-nowrap">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(showAllRows ? preprocessedData.normalized : preprocessedData.normalized.slice(0, 20)).map((row, i) => (
+                        <tr key={i} className="border-t border-border/50 hover:bg-muted/30 transition-colors">
+                          <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                          {row.map((v, j) => (
+                            <td key={j} className={cn(
+                              "px-3 py-1.5 font-mono",
+                              Math.abs(v) > 1.5 ? "text-accent font-semibold" : "text-foreground"
+                            )}>
+                              {Number.isFinite(v) ? v.toFixed(4) : "—"}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
               {preprocessedData.normalized.length > 20 && (
                 <div className="mt-3 flex items-center justify-between">
                   <p className="text-xs text-muted-foreground">
                     {showAllRows
-                      ? `Showing all ${preprocessedData.normalized.length} optimized rows`
-                      : `Showing first 20 of ${preprocessedData.normalized.length} optimized rows`}
+                      ? `Showing all ${preprocessedData.normalized.length} rows`
+                      : `Showing first 20 of ${preprocessedData.normalized.length} rows`}
                   </p>
                   <Button size="sm" variant="outline" onClick={() => setShowAllRows((v) => !v)}>
                     {showAllRows ? "Show first 20" : "Show all rows"}
